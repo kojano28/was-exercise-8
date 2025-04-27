@@ -12,11 +12,52 @@ sch_name("monitoring_scheme"). // the agent beliefs that it can manage schemes w
  * Plan for reacting to the addition of the goal !start
  * Triggering event: addition of goal !start
  * Context: the agent believes that it can manage a group and a scheme in an organization
- * Body: greets the user
+ * Body: initializes the organization
 */
 @start_plan
 +!start : org_name(OrgName) & group_name(GroupName) & sch_name(SchemeName) <-
-  .print("Hello world").
+  .print("Hello World");
+
+  createWorkspace(OrgName);
+  joinWorkspace(OrgName, OrgWspId);
+  
+  makeArtifact(OrgName, "ora4mas.nopl.OrgBoard", ["src/org/org-spec.xml"], OrgArtId)[wid(OrgWspId)];
+  focus(OrgArtId)[wid(OrgWspId)];
+  
+  createGroup(GroupName, GroupName, GroupArtId)[artifact_id(OrgBoardArtId)];
+  focus(GroupArtId)[wid(OrgWspId)];
+  
+  createScheme(SchemeName, SchemeName, SchemeArtId)[artifact_id(OrgBoardArtId)];
+  focus(SchemeArtId)[wid(OrgWspId)];
+  
+  .broadcast(tell, org_workspace_available(OrgName));
+  
+  ?formationStatus(ok)[artifact_id(GroupArtId)];
+  .print("Organization initialized successfully!").
+
+// Plan for periodically checking if there are available roles to be filled
+@check_available_roles_plan
++!check_available_roles : group_name(GroupName) & org_name(OrgName) <-
+  for (role(R,_) & role_cardinality(R,Min,Max)) {
+    
+    .findall(A, play(A,R,_), AgentsPlayingRole);
+    .length(AgentsPlayingRole, Count);
+    
+    // If there are not enough agents playing this role
+    if (Count < Min) {
+      .print("Role ", R, " needs more players (", Count, "/", Min, ")");
+      .broadcast(tell, available_role(R, OrgName));
+    }
+  }
+  .wait(15000); // Wait for 15 seconds
+  !check_available_roles.  // Continue checking
+
+// Plan if the formation status is ok.
+@formation_status_is_ok_plan
++formationStatus(ok)[artifact_id(GroupArtId)] : group(GroupName,_,GroupArtId)[artifact_id(OrgName)] & scheme(SchemeName,SchemeType,SchemeArtId) <-
+  .print("Group ", GroupName, " is well-formed.");
+  addScheme(SchemeName)[artifact_id(GroupArtId)];
+  focus(SchemeArtId).
 
 /* 
  * Plan for reacting to the addition of the test-goal ?formationStatus(ok)
@@ -26,8 +67,10 @@ sch_name("monitoring_scheme"). // the agent beliefs that it can manage schemes w
  * the agent waits until the belief is added in the belief base
 */
 @test_formation_status_is_ok_plan
-+?formationStatus(ok)[artifact_id(G)] : group(GroupName,_,G)[artifact_id(OrgName)] <-
++?formationStatus(ok)[artifact_id(G)] : group(GroupName,_,G)[artifact_id(OrgWsId)] <-
   .print("Waiting for group ", GroupName," to become well-formed");
+  .wait(15000);
+  !check_available_roles;
   .wait({+formationStatus(ok)[artifact_id(G)]}). // waits until the belief is added in the belief base
 
 /* 

@@ -1,20 +1,38 @@
 // sensing agent
 
 
-/* Initial beliefs and rules */
+role_goal(R, G)    :- role_mission(R, _, M) & mission_goal(M, G).
+can_achieve(G)     :- .relevant_plans({+!G}, LP) & LP \== [].
+i_have_plan_for(R) :- not ( role_goal(R, G) & not can_achieve(G) ).
 
-/* Initial goals */
-!start. // the agent has the goal to start
 
-/* 
- * Plan for reacting to the addition of the goal !start
- * Triggering event: addition of goal !start
- * Context: the agent believes that it can manage a group and a scheme in an organization
- * Body: greets the user
-*/
+!start.
 @start_plan
 +!start : true <-
-	.print("Hello world").
+    .print("Hello world").
+
+    
+// React to new organization workspace becoming available
++org_workspace_available(OrgWsp) : true <-
+  .print("New organization workspace available: ", OrgWsp);
+  
+  // Join workspace and focus on organizational artifacts
+  joinWorkspace(OrgWsp, WspId);
+  lookupArtifact(OrgWsp, OrgBoard);
+  focus(OrgBoard);
+  
+  .wait(500);
+  
+  // which roles are relevant for this agent
+  for (role(R, _) & i_have_plan_for(R)) {
+    .print("I can play the role: ", R);
+    
+    // Find the group board and adopt the role
+    for (group(Group, _, GroupBoard)) {
+      .print("Trying to adopt role ", R, " in group ", Group);
+      adoptRole(R)[artifact_id(GroupBoard)];
+    }
+  }.
 
 /* 
  * Plan for reacting to the addition of the goal !read_temperature
@@ -34,11 +52,11 @@
 /* Import behavior of agents that work in CArtAgO environments */
 { include("$jacamoJar/templates/common-cartago.asl") }
 
-/* Import behavior of agents that work in MOISE organizations */
-{ include("$jacamoJar/templates/common-moise.asl") }
-
 /* Import behavior of agents that reason on MOISE organizations */
 { include("$moiseJar/asl/org-rules.asl") }
+
+/* Import behavior of agents that work in MOISE organizations */
+{ include("$jacamoJar/templates/common-moise.asl") }
 
 /* Import behavior of agents that react to organizational events
 (if observing, i.e. being focused on the appropriate organization artifacts) */

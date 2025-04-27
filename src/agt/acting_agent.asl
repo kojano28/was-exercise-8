@@ -4,6 +4,11 @@
 // that describes a Thing of type https://ci.mines-stetienne.fr/kg/ontology#PhantomX
 robot_td("https://raw.githubusercontent.com/Interactions-HSG/example-tds/main/tds/leubot1.ttl").
 
+role_goal(R, G)    :- role_mission(R, _, M) & mission_goal(M, G).
+can_achieve(G)     :- .relevant_plans({+!G}, LP) & LP \== [].
+i_have_plan_for(R) :- not ( role_goal(R, G) & not can_achieve(G) ).
+
+
 /* Initial goals */
 !start. // the agent has the goal to start
 
@@ -17,6 +22,22 @@ robot_td("https://raw.githubusercontent.com/Interactions-HSG/example-tds/main/td
 +!start : true <-
 	.print("Hello world").
 
+// React to available role notifications
++available_role(Role, OrgWsp) : true <-
+  .print("Role available: ", Role, " in organization ", OrgWsp);
+  
+  joinWorkspace(OrgWsp, WspId);
+  lookupArtifact(OrgWsp, OrgBoard);
+  focus(OrgBoard);
+  
+  .wait(500);
+  
+  // Find the group board and adopt the role
+  for (group(Group, _, GroupBoard)) {
+    .print("Trying to adopt role ", Role, " in group ", Group);
+    adoptRole(Role)[artifact_id(GroupBoard)];
+  }.
+	
 /* 
  * Plan for reacting to the addition of the goal !manifest_temperature
  * Triggering event: addition of goal !manifest_temperature
